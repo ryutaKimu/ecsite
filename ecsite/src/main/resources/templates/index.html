@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html xmlns:th="www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<title>ECサイト</title>
+<link href="/css/style.css" rel="stylesheet" />
+<script>
+  let carList = [];
+  
+         document.addEventListener('DOMContentLoaded',event =>{
+           document.getElementById("loginForm").addEventListener("submit",login);
+           
+           const cartBtn = document.querySelectorAll(".cartBtn");
+           
+           cartBtn.forEach((btn)=>{
+            btn.addEventListener("click",addCart);
+           })
+           
+           document.getElementById("purchaseBtn").addEventListener("click",purchase);
+           document.getElementById("historyBtn").addEventListener("click",showHistory);
+         });
+         
+       
+         
+         
+         function initCart(){
+                 const tbody = document.querySelector("#cart tbody");
+                 while(tbody.lastChild){
+                   tbody.removeChild(tbody.lastChild);
+                 }
+                }
+                
+         
+         function login(event){
+           event.preventDefault();
+           
+           initCart();
+           cartList = [];
+           
+           
+           const postObj = {
+             "userName": document.querySelector("input[name = userName]").value,
+             "password": document.querySelector("input[name = password]").value
+           };
+           
+           fetch("/ecsite/api/login",{
+                 method: "POST",
+                 headers: {'Content-Type': "application/json"},
+                 body: JSON.stringify(postObj)
+               })
+           .then(response => response.text())
+           .then(res =>{
+             const user = JSON.parse(res);
+             document.getElementById("welcome").innerText = `ようこそ${user.fullName}さん`;
+             document.getElementById("hiddenUserId").value = user.id;
+             document.querySelector("input[name = userName]").value = "";
+             document.querySelector("input[name = password]").value = "";
+           })
+           .catch(error=>{
+             console.log("Error:",error);
+           })
+           
+         }
+         
+         function addCart(event){
+          const tdList = event.target.parentElement.parentElement.querySelectorAll("td");
+          
+          const goodsInfo = {
+            "id": tdList.item(0).innerText,
+            "goodsName": tdList.item(1).innerText,
+            "price": tdList.item(2).innerText,
+            "count": tdList.item(3).querySelector("input").value
+          };
+          
+          if(goodsInfo.count == "0" || goodsInfo.count == ""){
+            alert("注文数が0または空欄です");
+            return;
+          }
+          
+          cartList.push(goodsInfo);
+          
+          initCart();
+          
+          cartList.forEach(cart=>{
+            const tr = document.createElement("tr");
+            
+            for([key,value] of Object.entries(cart)){
+              const td = document.createElement("td");
+              td.innerText = value;
+              tr.appendChild(td);
+            }
+            const removeBtn = document.createElement("button");
+            removeBtn.innerText = "カード削除";
+            
+            removeBtn.setAttribute("class","removeBtn");
+            
+            removeBtn.addEventListener("click",removeCart);
+            
+            const td = document.createElement("td");
+            td.appendChild(removeBtn);
+            
+            tr.appendChild(td);
+            
+            const tbody = document.querySelector("#cart tbody");
+            tbody.appendChild(tr);
+          })
+          
+         }
+         
+         function removeCart(event){
+          
+          const tr = event.target.parentElement.parentElement;
+          const tdList = tr.querySelectorAll("td");
+          
+          const id = tdList.item(0).innerText;
+          
+          cartList = carList.filter(cart=>{
+            return cart.id !== id;
+          });
+          
+          while(tr.lastChild){
+            tr.removeChild(tr.lastChild);
+          }
+         }
+         
+         
+         
+         function purchase(event){
+          const postObj = {
+                     "userId": document.getElementById("hiddenUserId").value,
+                     "cartList": cartList
+                   }
+                   
+                   fetch("/ecsite/api/purchase",{
+                     method:"POST",
+                     headers: {"Content-Type": "application/json"},
+                     body: JSON.stringify(postObj)
+                   })
+                   .then(response => response.text())
+                   .then(result =>{
+                     alert(`${result}種類の商品を購入しました。`);
+                     const countElements = document.querySelectorAll(".count");
+                     countElements.forEach(element =>{
+                       element.value = "0";
+                     });
+                     
+                     initCart();
+                     cartList =  [];
+                     })
+                     .catch(error=>{
+                     console.log("Error:",error);
+                   });
+         }
+         
+         function showHistory(event) {
+             const postObj = { "userId": document.getElementById("hiddenUserId").value };
+             
+             fetch("/ecsite/api/history", {
+                 method: "POST",
+                 headers: { "Content-Type": "application/json" },
+                 body: JSON.stringify(postObj),
+             })
+             .then(response => response.text())
+             .then(result => {
+                 const historyList = JSON.parse(result);
+                 const tbody = document.querySelector("#history tbody");
+                 
+                 // 既存の行を削除
+                 while (tbody.lastChild) {
+                     tbody.removeChild(tbody.lastChild);
+                 }
+                 
+                 // 履歴リストを表示
+                 historyList.forEach(history => {
+                     const tr = document.createElement("tr");
+                     const keys = ["goodsName", "itemCount", "createdAt"];
+                     
+                     keys.forEach(key => {
+                         const td = document.createElement("td");
+                         td.innerText = history[key];
+                         tr.appendChild(td);
+                     });
+                     
+                     tbody.appendChild(tr);
+                 });
+             })
+             .catch(error => {
+                 console.error("Error:", error);
+             });
+         }
+
+         
+       
+       </script>
+</head>
+<body>
+  <header>
+    <h1>ECサイト</h1>
+  <div>
+    <form name="loginForm" id="loginForm" method="POST" action="#">
+      ユーザー名<input type="text" name="userName">
+      パスワード<input type="text" name="password">
+      <button type="submit">ログイン</button>
+     <button class="registerBtn"><a href="register">新規登録</a></button>
+    </form>
+    <span id="welcome">ようこそ！　ゲストさん</span>
+    <input type="hidden" id="hiddenUserId" value="0" />
+  </div>
+  </header>
+  
+  <table id="goodsListTable">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>商品名</th>
+        <th>価格</th>
+        <th>注文数</th>
+        <th>カート</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr th:each="item : ${goods}">
+        <td th:text="${item.id}"></td>
+        <td th:text="${item.goodsName}"></td>
+        <td th:text="${item.price}"></td>
+        <td><input type="number" class="count" value="0"></td>
+        <td><button class="cartBtn">カートに入れる</button></td>
+      </tr>
+    </tbody>
+  </table>
+  
+  <fieldset>
+    <legend>カート</legend>
+    <table id="cart">
+      <thead>
+        <tr>
+         <th>ID</th>
+         <th>商品名</th>
+         <th>価格</th>
+         <th>注文数</th>
+         <th>カート</th>
+        </tr>
+      </thead>
+      <tbody>
+  
+      </tbody>
+    </table>
+    <button id="purchaseBtn">購入</button>
+  </fieldset>
+  
+  <fieldset>
+      <legend>購入履歴</legend>
+      <table id="history">
+        <thead>
+          <tr>
+           <th>商品名</th>
+           <th>注文数</th>
+           <th>購入日時</th>
+          </tr>
+        </thead>
+        <tbody>
+    
+        </tbody>
+      </table>
+      <button id="historyBtn">履歴を表示</button>
+    </fieldset>
+  
+</body>
+</html>
